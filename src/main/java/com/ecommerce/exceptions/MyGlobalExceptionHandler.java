@@ -1,5 +1,6 @@
 package com.ecommerce.exceptions;
 
+import com.ecommerce.payload.APIResponse;
 import org.springframework.boot.context.config.ConfigDataResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,14 +28,16 @@ public class MyGlobalExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public  ResponseEntity<String>  myResourceNotFoundException(ResourceNotFoundException ex) {
+    public  ResponseEntity<APIResponse>  myResourceNotFoundException(ResourceNotFoundException ex) {
         String message = ex.getMessage();
-        return  new ResponseEntity<>(message,HttpStatus.NOT_FOUND);
+        APIResponse response = new APIResponse(message,false);
+        return  new ResponseEntity<>(response,HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<String> myApiException(ApiException ex) {
+    public ResponseEntity<APIResponse> myApiException(ApiException ex) {
         String message = ex.getMessage();
-        return  new ResponseEntity<>(message,HttpStatus.BAD_REQUEST);
+        APIResponse response = new APIResponse(message,false);
+        return  new ResponseEntity<>(response,HttpStatus.BAD_REQUEST);
     }
 }
