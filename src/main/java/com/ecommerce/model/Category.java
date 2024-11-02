@@ -20,7 +20,7 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long categoryId;
 
-    @Size(min = 2, max = 15, message = "Size should be in range of 2 to 15")
+    @Size(min = 2, max = 50, message = "Size should be in range of 2 to 15")
     @NotNull(message = "Category cannot be empty")
     @NotBlank(message = "Category cannot be empty")
     private String categoryName;
