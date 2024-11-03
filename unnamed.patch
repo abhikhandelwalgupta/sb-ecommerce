@@ -1,0 +1,278 @@
+Index: src/main/java/com/ecommerce/model/Product.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/model/Product.java b/src/main/java/com/ecommerce/model/Product.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/model/Product.java	
+@@ -0,0 +1,27 @@
++package com.ecommerce.model;
++
++import jakarta.persistence.*;
++import lombok.AllArgsConstructor;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++@Entity
++@Data
++@AllArgsConstructor
++@NoArgsConstructor
++public class Product {
++    @Id
++    @GeneratedValue(strategy = GenerationType.AUTO)
++    private Long productId;
++    private String productName;
++    private String image;
++    private String description;
++    private Integer quantity;
++    private double price;
++    private double discount;
++    private double specialPrice;
++
++    @ManyToOne
++    @JoinColumn(name = "category_id")
++    private Category category;
++}
+Index: src/main/java/com/ecommerce/service/impl/ProductServiceImpl.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/service/impl/ProductServiceImpl.java b/src/main/java/com/ecommerce/service/impl/ProductServiceImpl.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/service/impl/ProductServiceImpl.java	
+@@ -0,0 +1,71 @@
++package com.ecommerce.service.impl;
++
++import com.ecommerce.exceptions.ApiException;
++import com.ecommerce.exceptions.ResourceNotFoundException;
++import com.ecommerce.model.Category;
++import com.ecommerce.model.Product;
++import com.ecommerce.payload.ProductDTO;
++import com.ecommerce.payload.ProductResponse;
++import com.ecommerce.repositories.CategoryRepository;
++import com.ecommerce.repositories.ProductRepository;
++import com.ecommerce.service.ProductService;
++import org.modelmapper.ModelMapper;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++import java.util.ArrayList;
++import java.util.List;
++
++@Service
++public class ProductServiceImpl implements ProductService {
++
++    @Autowired
++    private ProductRepository productRepository;
++
++    @Autowired
++    private CategoryRepository categoryRepository;
++
++    @Autowired
++    private ModelMapper modelMapper;
++
++    @Override
++    public ProductDTO addProduct(Long categoryId, Product product) {
++        Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new ResourceNotFoundException("Category not found", "categoryId", categoryId));
++
++        product.setCategory(category);
++        double specialPrice = product.getPrice() - ((product.getDiscount() * 0.01) * product.getPrice());
++        product.setSpecialPrice(specialPrice);
++        product.setImage("default.png");
++        Product savedProduct = productRepository.save(product);
++        return modelMapper.map(savedProduct, ProductDTO.class);
++    }
++
++    @Override
++    public ProductResponse getAllProducts() {
++        List<Product> productList = productRepository.findAll();
++        if (productList.isEmpty()) throw new ApiException("Product list is empty");
++        List<ProductDTO> productDTO = productList.stream().map(product -> modelMapper.map(product, ProductDTO.class)).toList();
++        ProductResponse productResponse = new ProductResponse();
++        productResponse.setContent(productDTO);
++        return productResponse;
++    }
++
++    @Override
++    public ProductResponse secarchByCategory(Long categoryId) {
++        Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new ResourceNotFoundException("Category not found", "categoryId", categoryId));
++        List<Product> productList = productRepository.findByCategoryOrderByPriceAsc(category);
++        List<ProductDTO> productDTOS = productList.stream().map(product -> modelMapper.map(product, ProductDTO.class)).toList();
++        ProductResponse productResponse = new ProductResponse();
++        productResponse.setContent(productDTOS);
++        return productResponse;
++    }
++
++    @Override
++    public ProductResponse searchProductByKeyword(String keyword) {
++        List<Product> products = productRepository.findByProductNameLikeIgnoreCase(keyword);
++        List<ProductDTO> productDTOS = products.stream().map(product -> modelMapper.map(product, ProductDTO.class)).toList();
++        ProductResponse productResponse = new ProductResponse();
++        productResponse.setContent(productDTOS);
++        return productResponse;
++    }
++}
+Index: src/main/java/com/ecommerce/service/CategoryService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ecommerce/service/CategoryService.java b/src/main/java/com/ecommerce/service/CategoryService.java
+--- a/src/main/java/com/ecommerce/service/CategoryService.java	
++++ b/src/main/java/com/ecommerce/service/CategoryService.java	
+@@ -6,8 +6,11 @@
+ 
+ public interface CategoryService {
+ 
+-    CategoryResponse getAllCategories(Integer pageNumber, Integer pageSize,String sortBy,String sortOrder);
++    CategoryResponse getAllCategories(Integer pageNumber, Integer pageSize, String sortBy, String sortOrder);
++
+     CategoryDTO createCategory(CategoryDTO category);
++
+     CategoryDTO deleteCategory(Long id);
+-    CategoryDTO updateCategory(Long categoryId ,CategoryDTO category);
++
++    CategoryDTO updateCategory(Long categoryId, CategoryDTO category);
+ }
+Index: src/main/java/com/ecommerce/service/ProductService.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/service/ProductService.java b/src/main/java/com/ecommerce/service/ProductService.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/service/ProductService.java	
+@@ -0,0 +1,15 @@
++package com.ecommerce.service;
++
++import com.ecommerce.model.Product;
++import com.ecommerce.payload.ProductDTO;
++import com.ecommerce.payload.ProductResponse;
++
++public interface ProductService {
++     ProductDTO addProduct(Long categoryId, Product product) ;
++
++     ProductResponse getAllProducts() ;
++
++     ProductResponse secarchByCategory(Long categoryId);
++
++     ProductResponse searchProductByKeyword(String keyword);
++}
+Index: src/main/java/com/ecommerce/controller/ProductController.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/controller/ProductController.java b/src/main/java/com/ecommerce/controller/ProductController.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/controller/ProductController.java	
+@@ -0,0 +1,42 @@
++package com.ecommerce.controller;
++
++import com.ecommerce.model.Product;
++import com.ecommerce.payload.ProductDTO;
++import com.ecommerce.payload.ProductResponse;
++import com.ecommerce.service.ProductService;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.*;
++
++@RestController
++@RequestMapping("/api")
++public class ProductController {
++
++    @Autowired
++    private ProductService productService;
++
++    @PostMapping("/admin/categories/{categoryId}/product")
++    public ResponseEntity<ProductDTO> addProduct(@RequestBody Product product, @PathVariable Long categoryId) {
++        ProductDTO productDTO = productService.addProduct(categoryId, product);
++        return new ResponseEntity<>(productDTO, HttpStatus.CREATED);
++    }
++
++    @GetMapping("/public/products")
++    public ResponseEntity<ProductResponse> getAllProducts() {
++        ProductResponse productResponse = productService.getAllProducts();
++        return new ResponseEntity<>(productResponse, HttpStatus.OK);
++    }
++
++    @GetMapping("/public/categories/{categoryId}/products")
++    public ResponseEntity<ProductResponse> getProductsByCategory(@PathVariable Long categoryId) {
++        ProductResponse productResponse = productService.secarchByCategory(categoryId);
++        return new ResponseEntity<>(productResponse, HttpStatus.OK);
++    }
++
++    @GetMapping("/public/products/keyword/{keyword}")
++    public ResponseEntity<ProductResponse> getProductsByKeyword(@PathVariable String keyword) {
++        ProductResponse productResponse = productService.searchProductByKeyword(keyword);
++        return new ResponseEntity<>(productResponse, HttpStatus.FOUND);
++    }
++}
+Index: src/main/java/com/ecommerce/repositories/ProductRepository.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/repositories/ProductRepository.java b/src/main/java/com/ecommerce/repositories/ProductRepository.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/repositories/ProductRepository.java	
+@@ -0,0 +1,15 @@
++package com.ecommerce.repositories;
++
++import com.ecommerce.model.Category;
++import com.ecommerce.model.Product;
++import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.stereotype.Repository;
++
++import java.util.List;
++
++@Repository
++public interface ProductRepository extends JpaRepository<Product, Long> {
++    List<Product> findByCategoryOrderByPriceAsc(Category category);
++
++    List<Product> findByProductNameLikeIgnoreCase(String keyword);
++}
+Index: src/main/java/com/ecommerce/payload/ProductDTO.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/payload/ProductDTO.java b/src/main/java/com/ecommerce/payload/ProductDTO.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/payload/ProductDTO.java	
+@@ -0,0 +1,22 @@
++package com.ecommerce.payload;
++
++import com.ecommerce.model.Category;
++import jakarta.persistence.JoinColumn;
++import jakarta.persistence.ManyToOne;
++import lombok.AllArgsConstructor;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++@Data
++@NoArgsConstructor
++@AllArgsConstructor
++public class ProductDTO {
++
++    private Long productId;
++    private String productName;
++    private String image;
++    private Integer quantity;
++    private double price;
++    private double discount;
++    private double specialPrice;
++}
+Index: src/main/java/com/ecommerce/payload/ProductResponse.java
+===================================================================
+diff --git a/src/main/java/com/ecommerce/payload/ProductResponse.java b/src/main/java/com/ecommerce/payload/ProductResponse.java
+new file mode 100644
+--- /dev/null	
++++ b/src/main/java/com/ecommerce/payload/ProductResponse.java	
+@@ -0,0 +1,15 @@
++package com.ecommerce.payload;
++
++import lombok.AllArgsConstructor;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++import java.util.List;
++
++@Data
++@NoArgsConstructor
++@AllArgsConstructor
++public class ProductResponse {
++
++    private List<ProductDTO> content;
++}
